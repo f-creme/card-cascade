@@ -3,8 +3,17 @@ import random
 from typing import Literal, Union
 from pydantic import BaseModel
 
-from app.game.cards import Card, Color, NumberCard
-from app.game.state import GameState, Player, active_color
+from app.game.cards import (
+    BlockCard,
+    Block3Card,
+    Card, 
+    Color, 
+    DoubleCard, 
+    DrawCard, 
+    NumberCard,
+    SecondChanceCard
+)
+from app.game.state import GameState, DrawChain, Player, active_color
 
 class IllegalActionError(Exception):
     """Raised when an action doesn't respect game rules"""
@@ -43,6 +52,8 @@ def apply_action(state: GameState, action: Action) -> GameState:
         return _apply_play_card(state, action)
     if action.kind == "play_pair":
         return _apply_play_pair(state, action)
+    if action.kind == "play_special":
+        return _apply_play_special(state, action)
     if action.kind == "draw": 
         return _apply_draw(state, action)
     if action.kind == "pass":
@@ -78,6 +89,7 @@ def _matches_discard(card: NumberCard, state: GameState) -> bool:
 
 def _advance_turn(state: GameState) -> None:
     state.has_drawn = False
+    state.second_chances_played = 0
     n = len(state.players)
     for _ in range(n): 
         state.current_player_index = (state.current_player_index + 1) %n
@@ -86,6 +98,16 @@ def _advance_turn(state: GameState) -> None:
             state.pending_skips[next_player.id] -= 1
             continue
         return
+
+def _peek_next_player_id(state: GameState) -> str:
+    n = len(state.players)
+    return state.players[(state.current_player_index + 1) % n].id
+
+def _ensure_playable_on_number_top(state: GameState) -> None:
+    if state.draw_chain is not None:
+        raise IllegalActionError("A pick-up chain is active: you need to respond to it.")
+    if not isinstance(state.discard_pile[-1], NumberCard):
+        raise IllegalActionError("This card can only be played on a numbered card.")
 
 def _refill_draw_pile_if_needed(state: GameState) -> None: 
     if state.draw_pile:
@@ -135,7 +157,8 @@ def _apply_draw(state: GameState, action: DrawAction) -> GameState:
     _ensure_is_current_player(new_state, player)
 
     if new_state.draw_chain is not None:
-        raise IllegalActionError("A draw chain is active and needs to be answered.")
+        _resolve_draw_chain(new_state, player)
+        return new_state
 
     if new_state.has_drawn:
         raise IllegalActionError("A card has already been drawn this turn.")
@@ -155,7 +178,11 @@ def _apply_pass(state: GameState, action: PassAction) -> GameState:
     player = _find_player(new_state, action.player_id)
     _ensure_is_current_player(new_state, player)
 
-    if not new_state.has_drawn:
+    if new_state.draw_chain is not None:
+        _resolve_draw_chain(new_state, player)
+        return new_state
+
+    if not new_state.has_drawn and new_state.second_chances_played == 0:
         raise IllegalActionError("You have to draw a card before you can pass your turn")
 
     _advance_turn(new_state)
@@ -201,5 +228,112 @@ def _apply_play_pair(state: GameState, action: PlayPairAction) -> GameState:
         new_state.winner_id = player.id
     else:
         _advance_turn(new_state)
+
+    return new_state
+
+def _apply_block(
+        state: GameState, player: Player, card: BlockCard, action: PlaySpecialAction
+) -> None:
+    _ensure_playable_on_number_top(state)
+    if action.announced_color is None:
+        raise IllegalActionError("A color must be announced when this card is played.")
+
+    target_id = _peek_next_player_id(state)
+    state.pending_skips[target_id] = state.pending_skips.get(target_id, 0) + 1
+
+    state.discard_pile.append(card)
+    state.announced_color = action.announced_color
+    _advance_turn(state)
+
+def _apply_block3(
+        state: GameState, player: Player, card: Block3Card, action: PlaySpecialAction
+) -> None: 
+    _ensure_playable_on_number_top(state)
+    if action.announced_color is None:
+        raise IllegalActionError("A color must be announced when this card is played.")
+    if len(action.skip_targets) != 3:
+        raise IllegalActionError("Exactly three passes must be spread out.")
+
+    valid_ids = {p.id for p in state.players}
+    for target_id in action.skip_targets:
+        if target_id not in valid_ids:
+            raise IllegalActionError(f"Unknown player among targets: {target_id}")
+        state.pending_skips[target_id] = state.pending_skips.get(target_id, 0) + 1
+
+    state.discard_pile.append(card)
+    state.announced_color = action.announced_color
+    _advance_turn(state)
+
+def _apply_draw_or_double(
+        state: GameState,
+        player: Player, 
+        card: DrawCard | DoubleCard,
+        action: PlaySpecialAction
+) -> None: 
+    if action.announced_color is None:
+            raise IllegalActionError("A color must be announced when this card is played.")
+
+    if state.draw_chain is None:
+        if not isinstance(state.discard_pile[-1], NumberCard):
+            raise IllegalActionError("This card can only be played after a numbered card")
+        state.draw_chain = DrawChain(pending_color=action.announced_color)
+
+    if isinstance(card, DoubleCard):
+        state.draw_chain.has_double = True
+    else: 
+        state.draw_chain.total += card.amount
+    state.draw_chain.pending_color = action.announced_color
+    _advance_turn(state)
+
+def _draw_n_cards(state: GameState, player: Player, n: int) -> None:
+    for _ in range(n):
+        _refill_draw_pile_if_needed(state)
+        if not state.draw_pile:
+            break
+        player.hand.append(state.draw_pile.pop())
+
+def _resolve_draw_chain(state: GameState, player: Player) -> None:
+    chain = state.draw_chain
+    assert chain is not None
+
+    if chain.has_double:
+        _draw_n_cards(state, player, len(player.hand))
+
+    _draw_n_cards(state, player, chain.total)
+
+    state.announced_color = chain.pending_color
+    state.draw_chain = None
+
+def _apply_second_chance(state: GameState, player: Player, card: SecondChanceCard) -> None:
+    state.second_chance_pile.append(card)
+    state.second_chances_played += 1
+
+    _refill_draw_pile_if_needed(state)
+    if not state.draw_pile:
+        raise IllegalActionError("No more card to draw.")
+
+    drawn = state.draw_pile.pop()
+    player.hand.append(drawn)
+
+    if state.draw_chain is not None and not isinstance(drawn, (DrawCard, DoubleCard)):
+        _resolve_draw_chain(state, player)
+
+def _apply_play_special(state: GameState, action: PlaySpecialAction) -> GameState:
+    new_state = state.model_copy(deep=True)
+    player = _find_player(new_state, action.player_id)
+    _ensure_is_current_player(new_state, player)
+
+    card = _take_card_from_hand(player, action.card_id)
+
+    if isinstance(card, SecondChanceCard):
+        _apply_second_chance(new_state, player, card)
+    elif isinstance(card, (DrawCard, DoubleCard)):
+        _apply_draw_or_double(new_state, player, card, action)
+    elif isinstance(card, BlockCard):
+        _apply_block(new_state, player, card, action)
+    elif isinstance(card, Block3Card):
+        _apply_block3(new_state, player, card, action)
+    else: 
+        raise IllegalActionError("This card can't be played with this action")
 
     return new_state

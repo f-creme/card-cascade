@@ -12,7 +12,7 @@ class Player(BaseModel):
 class DrawChain(BaseModel):
     total: int = 0
     has_double: bool = False
-    last_player_id: str
+    pending_color: Color # the colour called out by the last player to extend the chain
 
 class GameState(BaseModel):
     players: list[Player]
@@ -24,6 +24,7 @@ class GameState(BaseModel):
     draw_chain: DrawChain | None = None
     pending_skips: dict[str, int] = {}
     second_chance_pile: list[Card] = []
+    second_chances_played: int = 0 # number of 'Second Chance' played this turn
     winner_id: str | None = None
 
 def active_color(state: GameState):
