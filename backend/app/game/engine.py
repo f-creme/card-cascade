@@ -17,7 +17,8 @@ class PlayPairAction(BaseModel):
     player_id: str
     card_id_1: str
     card_id_2: str
-
+    top_card_id: str
+    
 class PlaySpecialAction(BaseModel): 
     kind: Literal["play_special"] = "play_special"
     player_id: str
