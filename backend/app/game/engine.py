@@ -1,3 +1,5 @@
+import random
+
 from typing import Literal, Union
 from pydantic import BaseModel
 
@@ -18,7 +20,7 @@ class PlayPairAction(BaseModel):
     card_id_1: str
     card_id_2: str
     top_card_id: str
-    
+
 class PlaySpecialAction(BaseModel): 
     kind: Literal["play_special"] = "play_special"
     player_id: str
@@ -30,11 +32,22 @@ class DrawAction(BaseModel):
     kind: Literal["draw"] = "draw"
     player_id: str
 
-Action = Union[PlayCardAction, PlayPairAction, PlaySpecialAction, DrawAction]
+class PassAction(BaseModel):
+    kind: Literal["pass"] = "pass"
+    player_id: str
+
+Action = Union[PlayCardAction, PlayPairAction, PlaySpecialAction, DrawAction, PassAction]
 
 def apply_action(state: GameState, action: Action) -> GameState:
     if action.kind == "play_card":
         return _apply_play_card(state, action)
+    if action.kind == "play_pair":
+        return _apply_play_pair(state, action)
+    if action.kind == "draw": 
+        return _apply_draw(state, action)
+    if action.kind == "pass":
+        return _apply_pass(state, action)
+    
     raise NotImplementedError(f"Action '{action.kind}' hasn't been implemented yet.")
 
 def _find_player(state: GameState, player_id: str) -> Player:
@@ -64,6 +77,7 @@ def _matches_discard(card: NumberCard, state: GameState) -> bool:
     return card.color == active_color(state)
 
 def _advance_turn(state: GameState) -> None:
+    state.has_drawn = False
     n = len(state.players)
     for _ in range(n): 
         state.current_player_index = (state.current_player_index + 1) %n
@@ -72,6 +86,20 @@ def _advance_turn(state: GameState) -> None:
             state.pending_skips[next_player.id] -= 1
             continue
         return
+
+def _refill_draw_pile_if_needed(state: GameState) -> None: 
+    if state.draw_pile:
+        return 
+    if len(state.discard_pile) <= 1: 
+        return
+
+    top = state.discard_pile[-1]
+    new_pile = state.discard_pile[:-1] + state.second_chance_pile
+    random.shuffle(new_pile)
+
+    state.draw_pile = new_pile
+    state.discard_pile = [top]
+    state.second_chance_pile = []
 
 def _apply_play_card(state: GameState, action: PlayCardAction) -> GameState:
     new_state = state.model_copy(deep=True)
@@ -97,6 +125,81 @@ def _apply_play_card(state: GameState, action: PlayCardAction) -> GameState:
     if not player.hand:
         new_state.winner_id = player.id
     else: 
+        _advance_turn(new_state)
+
+    return new_state
+
+def _apply_draw(state: GameState, action: DrawAction) -> GameState:
+    new_state = state.model_copy(deep=True)
+    player = _find_player(new_state, action.player_id)
+    _ensure_is_current_player(new_state, player)
+
+    if new_state.draw_chain is not None:
+        raise IllegalActionError("A draw chain is active and needs to be answered.")
+
+    if new_state.has_drawn:
+        raise IllegalActionError("A card has already been drawn this turn.")
+
+    _refill_draw_pile_if_needed(new_state)
+    if not new_state.draw_pile:
+        raise IllegalActionError("No more card to draw.")
+
+    card = new_state.draw_pile.pop()
+    player.hand.append(card)
+    new_state.has_drawn = True
+
+    return new_state
+
+def _apply_pass(state: GameState, action: PassAction) -> GameState:
+    new_state = state.model_copy(deep=True)
+    player = _find_player(new_state, action.player_id)
+    _ensure_is_current_player(new_state, player)
+
+    if not new_state.has_drawn:
+        raise IllegalActionError("You have to draw a card before you can pass your turn")
+
+    _advance_turn(new_state)
+    return new_state
+
+def _apply_play_pair(state: GameState, action: PlayPairAction) -> GameState:
+    if action.card_id_1 == action.card_id_2:
+        raise IllegalActionError("Both cards must be different")
+
+    new_state = state.model_copy(deep=True)
+    player = _find_player(new_state, action.player_id)
+    _ensure_is_current_player(new_state, player)
+
+    if new_state.draw_chain is not None:
+        raise IllegalActionError("A draw chain is active and needs to be answered.")
+
+    top = new_state.discard_pile[-1]
+    if not isinstance(top, NumberCard):
+        raise IllegalActionError("Unable to sum on a special card")
+
+    card1 = _take_card_from_hand(player, action.card_id_1)
+    card2 = _take_card_from_hand(player, action.card_id_2)
+
+    if not (isinstance(card1, NumberCard) and isinstance(card2, NumberCard)):
+        raise IllegalActionError("Only numbered cards can be combined")
+
+    if card1.value + card2.value != top.value:
+        raise IllegalActionError(
+            "The sum of cards is not equal to the value of the card at the top of the discard pile"
+        )
+
+    if action.top_card_id not in (card1.id, card2.id):
+        raise IllegalActionError(
+            "The card chosen for the top is not part of the pair"
+        )
+
+    bottom, chosen_top = (card2, card1) if action.top_card_id == card1.id else (card1, card2)
+    new_state.discard_pile.append(bottom)
+    new_state.discard_pile.append(chosen_top)
+    new_state.announced_color = None
+
+    if not player.hand:
+        new_state.winner_id = player.id
+    else:
         _advance_turn(new_state)
 
     return new_state

@@ -17,12 +17,13 @@ class DrawChain(BaseModel):
 class GameState(BaseModel):
     players: list[Player]
     current_player_index: int = 0
+    has_drawn: bool = False
     draw_pile: list[Card]
     discard_pile: list[Card]
     announced_color: Color | None = None
     draw_chain: DrawChain | None = None
     pending_skips: dict[str, int] = {}
-    second_chance_pile: list[Card] = {}
+    second_chance_pile: list[Card] = []
     winner_id: str | None = None
 
 def active_color(state: GameState):
