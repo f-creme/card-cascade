@@ -21,13 +21,13 @@ def get_pool() -> Pool:
         raise RuntimeError("Database pool is not initialized")
     return _pool
 
-async def ensure_user(pool: Pool, user_id: str, username: str) -> None: 
+async def ensure_user(pool: Pool, user_id: str, username: str, avatar: str | None = None) -> None: 
     """Create user's row if it doesn't exist or update it's username"""
     await pool.execute(
-        "INSERT INTO users (uuid, username) " \
-        "VALUES ($1, $2) " \
-        "ON CONFLICT (uuid) DO UPDATE SET username = EXCLUDED.username", 
-        user_id, username
+        "INSERT INTO users (uuid, username, avatar) " \
+        "VALUES ($1, $2, $3) " \
+        "ON CONFLICT (uuid) DO UPDATE SET username = EXCLUDED.username, avatar = EXCLUDED.avatar", 
+        user_id, username, avatar
     )
 
 async def get_user(pool: Pool, user_id: str) -> dict | None:

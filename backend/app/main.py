@@ -49,6 +49,7 @@ class CreateRoomResponse(BaseModel):
 class JoinRoomRequest(BaseModel):
     player_id: str
     username: str
+    avatar: str | None = None
 
 class JoinRoomResponse(BaseModel):
     owner_id: str
@@ -90,7 +91,7 @@ async def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
-    await ensure_user(get_pool(), body.player_id, body.username)
+    await ensure_user(get_pool(), body.player_id, body.username, body.avatar)
 
     return JoinRoomResponse(owner_id=room.owner_id, players=[LobbyPlayer(id=pid, username=u) for pid, u in room.players])
 
