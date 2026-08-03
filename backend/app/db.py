@@ -22,13 +22,20 @@ def get_pool() -> Pool:
     return _pool
 
 async def ensure_user(pool: Pool, user_id: str, username: str) -> None: 
-    """Create user's row if it doesn't exist"""
+    """Create user's row if it doesn't exist or update it's username"""
     await pool.execute(
         "INSERT INTO users (uuid, username) " \
         "VALUES ($1, $2) " \
-        "ON CONFLICT (uuid) DO NOTHING", 
+        "ON CONFLICT (uuid) DO UPDATE SET username = EXCLUDED.username", 
         user_id, username
     )
+
+async def get_user(pool: Pool, user_id: str) -> dict | None:
+    row = await pool.fetchrow(
+        "SELECT uuid, username, avatar, games_played, games_won FROM users WHERE uuid = $1",
+        user_id
+    )
+    return dict(row) if row is not None else None
 
 async def record_game_result(pool: Pool, player_ids: list[str], winner_id: str) -> None:
     async with pool.acquire() as conn:

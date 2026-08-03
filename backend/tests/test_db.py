@@ -1,12 +1,10 @@
 import asyncio
 import uuid
 
-from app.db import close_pool, ensure_user, get_pool, init_pool, record_game_result
-
+from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result
 
 def run(coro):
     return asyncio.run(coro)
-
 
 def test_ensure_user_creates_a_row():
     async def scenario():
@@ -26,7 +24,6 @@ def test_ensure_user_creates_a_row():
     assert row["games_played"] == 0
     assert row["games_won"] == 0
 
-
 def test_ensure_user_is_idempotent():
     async def scenario():
         await init_pool()
@@ -43,7 +40,6 @@ def test_ensure_user_is_idempotent():
     count = run(scenario())
 
     assert count == 1
-
 
 def test_record_game_result_increments_played_and_won():
     async def scenario():
@@ -65,7 +61,6 @@ def test_record_game_result_increments_played_and_won():
 
     assert dict(row_alice) == {"games_played": 1, "games_won": 1}
     assert dict(row_bob) == {"games_played": 1, "games_won": 0}
-
 
 def test_record_game_result_accumulates_across_multiple_games():
     async def scenario():
@@ -89,3 +84,53 @@ def test_record_game_result_accumulates_across_multiple_games():
 
     assert dict(row_alice) == {"games_played": 3, "games_won": 1}
     assert dict(row_bob) == {"games_played": 3, "games_won": 2}
+
+def test_ensure_user_updates_username_on_conflict():
+    async def scenario():
+        await init_pool()
+        pool = get_pool()
+        user_id = str(uuid.uuid4())
+
+        await ensure_user(pool, user_id, "Alice")
+        await ensure_user(pool, user_id, "Alicia")
+
+        row = await pool.fetchrow("SELECT username FROM users WHERE uuid = $1", user_id)
+        await close_pool()
+        return row
+
+    row = run(scenario())
+
+    assert row["username"] == "Alicia"
+
+def test_get_user_returns_profile():
+    async def scenario():
+        await init_pool()
+        pool = get_pool()
+        user_id = str(uuid.uuid4())
+
+        await ensure_user(pool, user_id, "Alice")
+        profile = await get_user(pool, user_id)
+
+        await close_pool()
+        return profile
+
+    profile = run(scenario())
+
+    assert profile["username"] == "Alice"
+    assert profile["games_played"] == 0
+    assert profile["games_won"] == 0
+    assert profile["avatar"] is None
+
+def test_get_user_returns_none_for_unknown_id():
+    async def scenario():
+        await init_pool()
+        pool = get_pool()
+
+        profile = await get_user(pool, str(uuid.uuid4()))
+
+        await close_pool()
+        return profile
+
+    profile = run(scenario())
+
+    assert profile is None

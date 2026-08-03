@@ -27,7 +27,7 @@ def test_create_room_returns_a_six_character_code(client):
     room_id = response.json()["room_id"]
     assert len(room_id) == 6
 
-def test_join_room_returns_the_lobby_player_list(client):
+def test_join_room_returns_the_lobby_player_list_and_owner(client):
     room_id = client.post("/rooms").json()["room_id"]
     alice, bob = new_player_id(), new_player_id()
 
@@ -35,7 +35,9 @@ def test_join_room_returns_the_lobby_player_list(client):
     response = client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
 
     assert response.status_code == 200
-    assert response.json()["players"] == [
+    body = response.json()
+    assert body["owner_id"] == alice  # premier arrivé
+    assert body["players"] == [
         {"id": alice, "username": "Alice"},
         {"id": bob, "username": "Bob"},
     ]
@@ -47,17 +49,29 @@ def test_join_unknown_room_returns_404(client):
 
 def test_start_room_requires_two_players(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
+    alice = new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
 
-    response = client.post(f"/rooms/{room_id}/start")
+    response = client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     assert response.status_code == 400
 
+def test_start_room_requires_the_owner(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
+
+    response = client.post(f"/rooms/{room_id}/start", json={"player_id": bob})
+
+    assert response.status_code == 403
+
 def test_cannot_join_after_start(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
+    alice = new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
     client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Bob"})
-    client.post(f"/rooms/{room_id}/start")
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     response = client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Charlie"})
 
@@ -77,9 +91,10 @@ def test_websocket_rejects_unregistered_player(client):
     from starlette.websockets import WebSocketDisconnect
 
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
+    alice = new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
     client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Bob"})
-    client.post(f"/rooms/{room_id}/start")
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     try:
         with client.websocket_connect(f"/ws/{room_id}/{new_player_id()}"):
@@ -93,13 +108,13 @@ def test_full_flow_two_players_draw_and_broadcast(client):
     alice, bob = new_player_id(), new_player_id()
     client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
     client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
-    client.post(f"/rooms/{room_id}/start")
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
         initial0 = ws0.receive_json()
         assert initial0["player_id"] == alice
         assert len(initial0["hand"]) == 7
-        assert initial0["current_player_index"] == 0
+        assert initial0["current_player_index"] == 0  # alice commence toujours
 
         with client.websocket_connect(f"/ws/{room_id}/{bob}") as ws1:
             initial1 = ws1.receive_json()
@@ -122,12 +137,12 @@ def test_illegal_action_returns_an_error_without_crashing(client):
     alice, bob = new_player_id(), new_player_id()
     client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
     client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
-    client.post(f"/rooms/{room_id}/start")
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
-        ws0.receive_json()
+        ws0.receive_json()  # vue initiale
 
-        ws0.send_json({"kind": "draw", "player_id": bob})
+        ws0.send_json({"kind": "draw", "player_id": bob})  # ce n'est pas le tour de bob
 
         response = ws0.receive_json()
         assert "error" in response
@@ -137,7 +152,7 @@ def test_winning_a_game_persists_stats_to_the_database(client):
     alice, bob = new_player_id(), new_player_id()
     client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
     client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
-    client.post(f"/rooms/{room_id}/start")
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
 
     # on force une main sur le point de gagner plutôt que de jouer plusieurs
     # coups légaux juste pour vider une main distribuée au hasard
@@ -147,7 +162,7 @@ def test_winning_a_game_persists_stats_to_the_database(client):
     room.state.current_player_index = 0
 
     with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
-        ws0.receive_json()
+        ws0.receive_json()  # vue initiale
         ws0.send_json({"kind": "play_card", "player_id": alice, "card_id": "win"})
 
         final_view = ws0.receive_json()
@@ -171,3 +186,34 @@ def test_winning_a_game_persists_stats_to_the_database(client):
 
     assert dict(row_alice) == {"games_played": 1, "games_won": 1}
     assert dict(row_bob) == {"games_played": 1, "games_won": 0}
+
+def test_get_user_profile_after_joining(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice = new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+
+    response = client.get(f"/users/{alice}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["username"] == "Alice"
+    assert body["games_played"] == 0
+    assert body["games_won"] == 0
+
+def test_get_unknown_user_profile_returns_404(client):
+    response = client.get(f"/users/{new_player_id()}")
+
+    assert response.status_code == 404
+
+def test_rejoining_with_a_new_username_updates_it(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice = new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+
+    # une deuxième room, même uuid, nouveau pseudo
+    room_id_2 = client.post("/rooms").json()["room_id"]
+    client.post(f"/rooms/{room_id_2}/join", json={"player_id": alice, "username": "Alicia"})
+
+    response = client.get(f"/users/{alice}")
+
+    assert response.json()["username"] == "Alicia"

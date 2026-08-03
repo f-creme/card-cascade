@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.config import settings
-from app.db import close_pool, ensure_user, get_pool, init_pool, record_game_result
+from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result
 from app.game.engine import Action, IllegalActionError, apply_action
 from app.game.view import build_player_view
 from app.rooms import RoomManager
@@ -51,7 +51,18 @@ class JoinRoomRequest(BaseModel):
     username: str
 
 class JoinRoomResponse(BaseModel):
+    owner_id: str
     players: list[LobbyPlayer]
+
+class StartRoomRequest(BaseModel):
+    player_id: str
+
+class UserProfile(BaseModel):
+    uuid: str
+    username: str
+    avatar: str | None
+    games_played: int
+    games_won: int
 
 class StartRoomResponse(BaseModel):
     status: str
@@ -81,17 +92,32 @@ async def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
 
     await ensure_user(get_pool(), body.player_id, body.username)
 
-    return JoinRoomResponse(players=[LobbyPlayer(id=pid, username=u) for pid, u in room.players])
+    return JoinRoomResponse(owner_id=room.owner_id, players=[LobbyPlayer(id=pid, username=u) for pid, u in room.players])
+
+@app.get("/users/{user_id}", response_model=UserProfile)
+async def get_user_profile(user_id: str) -> UserProfile:
+    profile = await get_user(get_pool(), user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Unknown user")
+    return UserProfile(
+        uuid=str(profile["uuid"]),
+        username=profile["username"],
+        avatar=profile["avatar"],
+        games_played=profile["games_played"],
+        games_won=profile["games_won"]
+    )
 
 @app.post("/rooms/{room_id}/start", response_model=StartRoomResponse)
-def start_room(room_id: str) -> StartRoomResponse:
+def start_room(room_id: str, body: StartRoomRequest) -> StartRoomResponse:
     try:
         room = rooms.get_room(room_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown room")
 
     try: 
-        room.start()
+        room.start(body.player_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
