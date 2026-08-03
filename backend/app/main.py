@@ -1,16 +1,24 @@
 import random
 import string
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.config import settings
+from app.db import close_pool, ensure_user, get_pool, init_pool, record_game_result
 from app.game.engine import Action, IllegalActionError, apply_action
 from app.game.view import build_player_view
 from app.rooms import RoomManager
 
-app = FastAPI(title="card-cascade-api")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_pool()
+    yield
+    await close_pool()
+
+app = FastAPI(title="card-cascade-api", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +68,7 @@ def create_room() -> CreateRoomResponse:
     raise HTTPException(status_code=500, detail="Unable to create an identifier for the room")
 
 @app.post("/rooms/{room_id}/join", response_model=JoinRoomResponse)
-def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
+async def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
     try:
         room = rooms.get_room(room_id)
     except KeyError:
@@ -70,6 +78,8 @@ def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
         room.add_player(body.player_id, body.username)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+    await ensure_user(get_pool(), body.player_id, body.username)
 
     return JoinRoomResponse(players=[LobbyPlayer(id=pid, username=u) for pid, u in room.players])
 
@@ -119,6 +129,11 @@ async def play(websocket: WebSocket, room_id: str, player_id: str) -> None:
                 await websocket.send_json({"error": str(e)})
                 continue
 
+            if room.state.winner_id is not None and not room.result_recorded:
+                room.result_recorded = True
+                player_ids = [p.id for p in room.state.players]
+                await record_game_result(get_pool(), player_ids, room.state.winner_id)
+            
             await _broadcast_view(room)
 
     except WebSocketDisconnect:

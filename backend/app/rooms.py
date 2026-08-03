@@ -9,6 +9,7 @@ class Room:
     players: list[tuple[str, str]] = field(default_factory=list) # player_id, username
     state: GameState | None = None
     connections: dict[str, WebSocket] = field(default_factory=dict)
+    result_recorded: bool = False
 
     def add_player(self, player_id: str, username: str) -> None: 
         if self.state is not None:

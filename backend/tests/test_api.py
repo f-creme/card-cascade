@@ -1,105 +1,111 @@
+import asyncio
+import uuid
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.game.cards import Color, NumberCard
 from app.main import app, rooms
 
-def fresh_client() -> TestClient:
-    return TestClient(app)
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
 
-def test_create_room_returns_a_six_character_code():
-    client = fresh_client()
 
+def new_player_id() -> str:
+    return str(uuid.uuid4())
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+def test_create_room_returns_a_six_character_code(client):
     response = client.post("/rooms")
 
     assert response.status_code == 200
     room_id = response.json()["room_id"]
     assert len(room_id) == 6
 
-def test_join_room_returns_the_lobby_player_list():
-    client = fresh_client()
+def test_join_room_returns_the_lobby_player_list(client):
     room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
 
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
-    response = client.post(f"/rooms/{room_id}/join", json={"player_id": "p1", "username": "Bob"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    response = client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
 
     assert response.status_code == 200
     assert response.json()["players"] == [
-        {"id": "p0", "username": "Alice"},
-        {"id": "p1", "username": "Bob"},
+        {"id": alice, "username": "Alice"},
+        {"id": bob, "username": "Bob"},
     ]
 
-def test_join_unknown_room_returns_404():
-    client = fresh_client()
-
-    response = client.post("/rooms/GHOST0/join", json={"player_id": "p0", "username": "Alice"})
+def test_join_unknown_room_returns_404(client):
+    response = client.post("/rooms/GHOST0/join", json={"player_id": new_player_id(), "username": "Alice"})
 
     assert response.status_code == 404
 
-def test_start_room_requires_two_players():
-    client = fresh_client()
+def test_start_room_requires_two_players(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
 
     response = client.post(f"/rooms/{room_id}/start")
 
     assert response.status_code == 400
 
-def test_cannot_join_after_start():
-    client = fresh_client()
+def test_cannot_join_after_start(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p1", "username": "Bob"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Bob"})
     client.post(f"/rooms/{room_id}/start")
 
-    response = client.post(f"/rooms/{room_id}/join", json={"player_id": "p2", "username": "Charlie"})
+    response = client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Charlie"})
 
     assert response.status_code == 409
 
-def test_websocket_rejects_unknown_room():
+def test_websocket_rejects_unknown_room(client):
     from starlette.websockets import WebSocketDisconnect
 
-    client = fresh_client()
-
     try:
-        with client.websocket_connect("/ws/GHOST0/p0"):
+        with client.websocket_connect(f"/ws/GHOST0/{new_player_id()}"):
             pass
         assert False, "aurait dû fermer la connexion"
     except WebSocketDisconnect as exc:
         assert exc.code == 4404
 
-def test_websocket_rejects_unregistered_player():
+def test_websocket_rejects_unregistered_player(client):
     from starlette.websockets import WebSocketDisconnect
 
-    client = fresh_client()
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p1", "username": "Bob"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": new_player_id(), "username": "Bob"})
     client.post(f"/rooms/{room_id}/start")
 
     try:
-        with client.websocket_connect(f"/ws/{room_id}/never-joined"):
+        with client.websocket_connect(f"/ws/{room_id}/{new_player_id()}"):
             pass
         assert False, "aurait dû fermer la connexion"
     except WebSocketDisconnect as exc:
         assert exc.code == 4403
 
-def test_full_flow_two_players_draw_and_broadcast():
-    client = fresh_client()
+def test_full_flow_two_players_draw_and_broadcast(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p1", "username": "Bob"})
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
     client.post(f"/rooms/{room_id}/start")
 
-    with client.websocket_connect(f"/ws/{room_id}/p0") as ws0:
+    with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
         initial0 = ws0.receive_json()
-        assert initial0["player_id"] == "p0"
+        assert initial0["player_id"] == alice
         assert len(initial0["hand"]) == 7
-        assert initial0["current_player_index"] == 0 
+        assert initial0["current_player_index"] == 0
 
-        with client.websocket_connect(f"/ws/{room_id}/p1") as ws1:
+        with client.websocket_connect(f"/ws/{room_id}/{bob}") as ws1:
             initial1 = ws1.receive_json()
-            assert initial1["player_id"] == "p1"
+            assert initial1["player_id"] == bob
 
-            ws0.send_json({"kind": "draw", "player_id": "p0"})
+            ws0.send_json({"kind": "draw", "player_id": alice})
 
             update0 = ws0.receive_json()
             update1 = ws1.receive_json()
@@ -107,21 +113,61 @@ def test_full_flow_two_players_draw_and_broadcast():
     assert len(update0["hand"]) == 8
     assert update0["has_drawn"] is True
 
-    p0_from_p1_view = next(p for p in update1["players"] if p["id"] == "p0")
-    assert p0_from_p1_view["hand_count"] == 8
-    assert "hand" not in p0_from_p1_view
+    alice_from_bob_view = next(p for p in update1["players"] if p["id"] == alice)
+    assert alice_from_bob_view["hand_count"] == 8
+    assert "hand" not in alice_from_bob_view
 
-def test_illegal_action_returns_an_error_without_crashing():
-    client = fresh_client()
+def test_illegal_action_returns_an_error_without_crashing(client):
     room_id = client.post("/rooms").json()["room_id"]
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p0", "username": "Alice"})
-    client.post(f"/rooms/{room_id}/join", json={"player_id": "p1", "username": "Bob"})
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
     client.post(f"/rooms/{room_id}/start")
 
-    with client.websocket_connect(f"/ws/{room_id}/p0") as ws0:
-        ws0.receive_json()  # vue initiale
+    with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
+        ws0.receive_json()
 
-        ws0.send_json({"kind": "draw", "player_id": "p1"})
+        ws0.send_json({"kind": "draw", "player_id": bob})
 
         response = ws0.receive_json()
         assert "error" in response
+
+def test_winning_a_game_persists_stats_to_the_database(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
+    client.post(f"/rooms/{room_id}/start")
+
+    # on force une main sur le point de gagner plutôt que de jouer plusieurs
+    # coups légaux juste pour vider une main distribuée au hasard
+    room = rooms.get_room(room_id)
+    room.state.discard_pile = [NumberCard(id="top", value=5, color=Color.GREEN)]
+    room.state.players[0].hand = [NumberCard(id="win", value=5, color=Color.GREEN)]
+    room.state.current_player_index = 0
+
+    with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
+        ws0.receive_json()
+        ws0.send_json({"kind": "play_card", "player_id": alice, "card_id": "win"})
+
+        final_view = ws0.receive_json()
+
+    assert final_view["winner_id"] == alice
+
+    import asyncpg
+
+    from app.config import settings
+
+    async def fetch_stats():
+        conn = await asyncpg.connect(settings.database_url)
+        try:
+            row_alice = await conn.fetchrow("SELECT games_played, games_won FROM users WHERE uuid = $1", alice)
+            row_bob = await conn.fetchrow("SELECT games_played, games_won FROM users WHERE uuid = $1", bob)
+            return row_alice, row_bob
+        finally:
+            await conn.close()
+
+    row_alice, row_bob = run(fetch_stats())
+
+    assert dict(row_alice) == {"games_played": 1, "games_won": 1}
+    assert dict(row_bob) == {"games_played": 1, "games_won": 0}

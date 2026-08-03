@@ -6,7 +6,7 @@ class Settings(BaseSettings):
         env_file=f".env.{os.getenv('ENVIRONMENT', 'dev')}", 
         extra="ignore",
     )
-    database_url : str = "postgresql+asyncpg://carduser:cardpass@db:5432/carddb"
+    database_url : str = "postgresql://carduser:cardpass@db:5432/carddb"
     cors_origins : list[str] = ["http://localhost:5173"]
     environment  : str = "dev"
 

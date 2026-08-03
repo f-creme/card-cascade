@@ -1,0 +1,43 @@
+import asyncpg
+
+from asyncpg import Pool
+
+from app.config import settings
+
+_pool : Pool | None = None
+
+async def init_pool() -> None:
+    global _pool
+    _pool = await asyncpg.create_pool(settings.database_url)
+
+async def close_pool() -> None: 
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
+def get_pool() -> Pool: 
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    return _pool
+
+async def ensure_user(pool: Pool, user_id: str, username: str) -> None: 
+    """Create user's row if it doesn't exist"""
+    await pool.execute(
+        "INSERT INTO users (uuid, username) " \
+        "VALUES ($1, $2) " \
+        "ON CONFLICT (uuid) DO NOTHING", 
+        user_id, username
+    )
+
+async def record_game_result(pool: Pool, player_ids: list[str], winner_id: str) -> None:
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.executemany(
+                "UPDATE users SET games_played = games_played + 1 WHERE uuid = $1",
+                [(pid, ) for pid in player_ids]
+            )
+            await conn.execute(
+                "UPDATE users SET games_won = games_won + 1 WHERE uuid = $1",
+                winner_id
+            )
