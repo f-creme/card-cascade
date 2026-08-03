@@ -45,7 +45,11 @@ class PassAction(BaseModel):
     kind: Literal["pass"] = "pass"
     player_id: str
 
-Action = Union[PlayCardAction, PlayPairAction, PlaySpecialAction, DrawAction, PassAction]
+class LeaveAction(BaseModel):
+    kind: Literal["leave"] = "leave"
+    player_id: str
+
+Action = Union[PlayCardAction, PlayPairAction, PlaySpecialAction, DrawAction, PassAction, LeaveAction]
 
 def apply_action(state: GameState, action: Action) -> GameState:
     if action.kind == "play_card":
@@ -58,6 +62,8 @@ def apply_action(state: GameState, action: Action) -> GameState:
         return _apply_draw(state, action)
     if action.kind == "pass":
         return _apply_pass(state, action)
+    if action.kind == "leave":
+        return _apply_leave(state, action)
     
     raise NotImplementedError(f"Action '{action.kind}' hasn't been implemented yet.")
 
@@ -94,6 +100,8 @@ def _advance_turn(state: GameState) -> None:
     for _ in range(n): 
         state.current_player_index = (state.current_player_index + 1) %n
         next_player = state.players[state.current_player_index]
+        if next_player.id in state.left_players:
+            continue
         if state.pending_skips.get(next_player.id, 0) > 0:
             state.pending_skips[next_player.id] -= 1
             continue
@@ -117,6 +125,10 @@ def _refill_draw_pile_if_needed(state: GameState) -> None:
 
     top = state.discard_pile[-1]
     new_pile = state.discard_pile[:-1] + state.second_chance_pile
+    for player in state.players:
+        if player.id in state.left_players and player.hand:
+            new_pile += player.hand
+            player.hand = []
     random.shuffle(new_pile)
 
     state.draw_pile = new_pile
@@ -336,4 +348,25 @@ def _apply_play_special(state: GameState, action: PlaySpecialAction) -> GameStat
     else: 
         raise IllegalActionError("This card can't be played with this action")
 
+    return new_state
+
+def _apply_leave(state: GameState, action: LeaveAction) -> GameState:
+    new_state = state.model_copy(deep=True)
+    player = _find_player(new_state, action.player_id)
+
+    if action.player_id in new_state.left_players:
+        raise IllegalActionError("This player already left the room.")
+
+    new_state.left_players = new_state.left_players | {action.player_id}
+
+    active_players = [p for p in new_state.players if p.id not in new_state.left_players]
+
+    if len(active_players) == 1:
+        new_state.winner_id = active_players[0].id
+        return new_state
+
+    was_their_turn = new_state.players[new_state.current_player_index].id == action.player_id
+    if was_their_turn:
+        _advance_turn(new_state)
+        
     return new_state

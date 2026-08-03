@@ -8,6 +8,7 @@ class PublicPlayer(BaseModel):
     id: str
     username: str
     hand_count: int
+    has_left: bool
 
 
 class PlayerView(BaseModel):
@@ -35,7 +36,12 @@ def build_player_view(state: GameState, player_id: str) -> PlayerView:
         player_id=player_id,
         hand=viewer.hand,
         players=[
-            PublicPlayer(id=p.id, username=p.username, hand_count=len(p.hand))
+            PublicPlayer(
+                id=p.id, 
+                username=p.username, 
+                hand_count=len(p.hand),
+                has_left=p.id in state.left_players,
+            )
             for p in state.players
         ],
         current_player_index=state.current_player_index,

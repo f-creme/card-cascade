@@ -217,3 +217,26 @@ def test_rejoining_with_a_new_username_updates_it(client):
     response = client.get(f"/users/{alice}")
 
     assert response.json()["username"] == "Alicia"
+
+def test_leaving_via_websocket_is_broadcast_and_can_end_the_game(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
+
+    with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
+        ws0.receive_json()
+
+        with client.websocket_connect(f"/ws/{room_id}/{bob}") as ws1:
+            ws1.receive_json()
+
+            ws0.send_json({"kind": "leave", "player_id": alice})
+
+            update0 = ws0.receive_json()
+            update1 = ws1.receive_json()
+
+    assert update1["winner_id"] == bob
+    alice_from_bob_view = next(p for p in update1["players"] if p["id"] == alice)
+    assert alice_from_bob_view["has_left"] is True
+    assert update0["winner_id"] == bob

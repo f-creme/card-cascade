@@ -26,6 +26,7 @@ class GameState(BaseModel):
     second_chance_pile: list[Card] = []
     second_chances_played: int = 0 # number of 'Second Chance' played this turn
     winner_id: str | None = None
+    left_players: set[str] = set()
 
 def active_color(state: GameState):
     top = state.discard_pile[-1]
