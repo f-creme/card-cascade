@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.config import settings
-from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result
+from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result, get_users_stats
 from app.game.engine import Action, IllegalActionError, apply_action
 from app.game.view import build_player_view
 from app.rooms import RoomManager
@@ -43,6 +43,13 @@ class LobbyPlayer(BaseModel):
     id: str
     username: str
 
+class LobbyPlayerWithStats(BaseModel):
+    id: str
+    username: str
+    avatar: str | None
+    games_played: int
+    games_won: int
+
 class CreateRoomResponse(BaseModel):
     room_id: str
 
@@ -67,6 +74,11 @@ class UserProfile(BaseModel):
 
 class StartRoomResponse(BaseModel):
     status: str
+
+class RoomStatusResponse(BaseModel):
+    owner_id: str
+    started: bool
+    players: list[LobbyPlayerWithStats]
 
 @app.post("/rooms", response_model=CreateRoomResponse)
 def create_room() -> CreateRoomResponse:
@@ -123,6 +135,30 @@ def start_room(room_id: str, body: StartRoomRequest) -> StartRoomResponse:
         raise HTTPException(status_code=400, detail=str(e))
 
     return StartRoomResponse(status="started")
+
+@app.get("/rooms/{room_id}", response_model=RoomStatusResponse)
+async def get_room_status(room_id: str) -> RoomStatusResponse:
+    try: 
+        room = rooms.get_room(room_id=room_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown room")
+
+    stats = await get_users_stats(get_pool(), [pid for pid, _ in room.players])
+
+    return RoomStatusResponse(
+        owner_id=room.owner_id,
+        started=room.state is not None,
+        players=[
+            LobbyPlayerWithStats(
+                id=pid,
+                username=username,
+                avatar=stats.get(pid, {}).get("avatar"),
+                games_played=stats.get(pid, {}).get("games_played", 0),
+                games_won=stats.get(pid, {}).get("games_won", 0)
+            )
+            for pid, username in room.players
+        ],
+    )
 
 # --- WebSocket only for playing, after registration via /join ---
 @app.websocket("/ws/{room_id}/{player_id}")

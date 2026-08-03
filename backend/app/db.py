@@ -48,3 +48,13 @@ async def record_game_result(pool: Pool, player_ids: list[str], winner_id: str) 
                 "UPDATE users SET games_won = games_won + 1 WHERE uuid = $1",
                 winner_id
             )
+
+async def get_users_stats(pool: Pool, user_ids: list[str]) -> dict[str, dict]:
+    if not user_ids:
+        return {}
+    rows = await pool.fetch(
+        "SELECT uuid, avatar, games_played, games_won " \
+        "FROM users WHERE uuid = ANY($1::uuid[])",
+        user_ids,
+    )
+    return {str(row["uuid"]): dict(row) for row in rows}

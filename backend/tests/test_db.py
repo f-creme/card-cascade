@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 
-from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result
+from app.db import close_pool, ensure_user, get_pool, get_user, get_users_stats, init_pool, record_game_result
 
 def run(coro):
     return asyncio.run(coro)
@@ -134,3 +134,34 @@ def test_get_user_returns_none_for_unknown_id():
     profile = run(scenario())
 
     assert profile is None
+
+def test_get_users_stats_returns_map_by_id():
+    async def scenario():
+        await init_pool()
+        pool = get_pool()
+        alice, bob = str(uuid.uuid4()), str(uuid.uuid4())
+
+        await ensure_user(pool, alice, "Alice", "avatar-1")
+        await ensure_user(pool, bob, "Bob", "avatar-2")
+        await record_game_result(pool, [alice, bob], winner_id=alice)
+
+        stats = await get_users_stats(pool, [alice, bob])
+        await close_pool()
+        return stats, alice, bob
+
+    stats, alice, bob = run(scenario())
+
+    assert stats[alice]["avatar"] == "avatar-1"
+    assert stats[alice]["games_won"] == 1
+    assert stats[bob]["games_won"] == 0
+
+
+def test_get_users_stats_with_empty_list_returns_empty_dict():
+    async def scenario():
+        await init_pool()
+        pool = get_pool()
+        result = await get_users_stats(pool, [])
+        await close_pool()
+        return result
+
+    assert run(scenario()) == {}

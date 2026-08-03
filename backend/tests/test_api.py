@@ -240,3 +240,38 @@ def test_leaving_via_websocket_is_broadcast_and_can_end_the_game(client):
     alice_from_bob_view = next(p for p in update1["players"] if p["id"] == alice)
     assert alice_from_bob_view["has_left"] is True
     assert update0["winner_id"] == bob
+
+def test_get_room_status_returns_players_with_stats(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice", "avatar": "avatar-1"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob", "avatar": "avatar-2"})
+
+    response = client.get(f"/rooms/{room_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["owner_id"] == alice
+    assert body["started"] is False
+    assert body["players"] == [
+        {"id": alice, "username": "Alice", "avatar": "avatar-1", "games_played": 0, "games_won": 0},
+        {"id": bob, "username": "Bob", "avatar": "avatar-2", "games_played": 0, "games_won": 0},
+    ]
+
+
+def test_get_room_status_reflects_started_flag(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
+
+    response = client.get(f"/rooms/{room_id}")
+
+    assert response.json()["started"] is True
+
+
+def test_get_room_status_unknown_room_returns_404(client):
+    response = client.get("/rooms/GHOST0")
+
+    assert response.status_code == 404
