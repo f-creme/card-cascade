@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useIdentity } from "./hooks/useIdentity";
 import { IdentityScreen } from "./screens/IdentityScreen";
 import { LobbyScreen } from "./screens/LobbyScreen";
+import { GameScreen } from "./screens/GameScreen";
 import type { Identity } from "./types";
 
 function App() {
@@ -32,13 +33,7 @@ function App() {
     return <LobbyScreen roomId={roomId} identity={identity} onGameStart={handleGameStart} />;
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-base-200">
-      <p className="text-lg">
-        Partie lancée dans la room <span className="font-mono font-bold">{roomId}</span> !
-      </p>
-    </div>
-  );
+  return <GameScreen roomId={roomId} identity={identity} />;
 }
 
 export default App;
