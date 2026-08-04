@@ -1,6 +1,6 @@
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CardBack, CardView } from "../components/CardView";
-import type { Identity } from "../types";
+import type { Card, Identity } from "../types";
 
 interface Props {
   roomId: string;
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function GameScreen({ roomId, identity }: Props) {
-  const { view, serverError, connected } = useGameSocket(roomId, identity.uuid);
+  const { view, serverError, connected, send } = useGameSocket(roomId, identity.uuid);
 
   if (!view) {
     return (
@@ -18,8 +18,28 @@ export function GameScreen({ roomId, identity }: Props) {
     );
   }
 
+  const myIndex = view.players.findIndex((p) => p.id === view.player_id);
+  const isMyTurn = view.current_player_index === myIndex && !view.winner_id;
   const opponents = view.players.filter((p) => p.id !== view.player_id);
   const topDiscard = view.discard_pile[view.discard_pile.length - 1];
+
+  function handleCardClick(card: Card) {
+    if (!isMyTurn) return;
+    if (card.kind === "number") {
+      send({ kind: "play_card", player_id: identity.uuid, card_id: card.id });
+    }
+    // Les cartes spéciales seront gérées à l'étape suivante.
+  }
+
+  function handleDraw() {
+    if (!isMyTurn) return;
+    send({ kind: "draw", player_id: identity.uuid });
+  }
+
+  function handlePass() {
+    if (!isMyTurn) return;
+    send({ kind: "pass", player_id: identity.uuid });
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-base-200">
@@ -52,7 +72,7 @@ export function GameScreen({ roomId, identity }: Props) {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-center gap-1">
-            <CardBack count={view.draw_pile_count} />
+            <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
             <span className="text-xs text-base-content/60">Pioche</span>
           </div>
 
@@ -71,13 +91,31 @@ export function GameScreen({ roomId, identity }: Props) {
           )}
         </div>
 
+        <p className="text-lg font-semibold">
+          {isMyTurn ? "À toi de jouer" : `Tour de ${view.players[view.current_player_index]?.username}`}
+        </p>
+
         {serverError && <p className="text-sm text-error">{serverError}</p>}
       </div>
 
       <div className="flex flex-col gap-3 bg-base-100 p-3 shadow-inner">
+        <div className="flex justify-center gap-2">
+          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handleDraw}>
+            Piocher
+          </button>
+          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handlePass}>
+            Passer
+          </button>
+        </div>
+
         <div className="flex gap-2 overflow-x-auto px-2 pb-2">
           {view.hand.map((card) => (
-            <CardView key={card.id} card={card} />
+            <CardView
+              key={card.id}
+              card={card}
+              onClick={card.kind === "number" ? () => handleCardClick(card) : undefined}
+              disabled={!isMyTurn}
+            />
           ))}
         </div>
       </div>
