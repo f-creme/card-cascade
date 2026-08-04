@@ -25,3 +25,17 @@ export interface JoinRoomResponse {
 export interface CreateRoomResponse {
     room_id: string;
 }
+
+export interface LobbyPlayerWithStats {
+    id: string;
+    username: string;
+    avatar: string;
+    games_played: number;
+    games_won: number;
+}
+
+export interface RoomStatus {
+    owner_id: string;
+    started: boolean;
+    players: LobbyPlayerWithStats[];
+}

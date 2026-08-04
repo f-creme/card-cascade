@@ -13,3 +13,7 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     { id: "avatar-7", src: "/avatars/avatar-7.png"},
     { id: "avatar-8", src: "/avatars/avatar-8.png"},
 ]
+
+export function avatarSrc(avatarId: string | null): string {
+    return AVATAR_OPTIONS.find((a) => a.id === avatarId)?.src ?? AVATAR_OPTIONS[0].src;
+}

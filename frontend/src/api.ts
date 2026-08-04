@@ -1,4 +1,4 @@
-import type { CreateRoomResponse, JoinRoomResponse, UserProfile } from "./types";
+import type { CreateRoomResponse, JoinRoomResponse, RoomStatus, UserProfile } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -35,3 +35,16 @@ export async function joinRoom(
     return parseOrThrow<JoinRoomResponse>(response);
 }
 
+export async function getRoomStatus(roomId: string): Promise<RoomStatus> {
+    const response = await fetch(`${API_URL}/rooms/${roomId}`);
+    return parseOrThrow<RoomStatus>(response);
+}
+
+export async function startRoom(roomId: string, playerId: string): Promise<void> {
+    const response = await fetch(`${API_URL}/rooms/${roomId}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: playerId }),
+    });
+    await parseOrThrow<{ status: string }>(response);
+}
