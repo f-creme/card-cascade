@@ -80,6 +80,7 @@ export type Card = NumberCard | DrawCard | DoubleCard | SecondChanceCard | Block
 export interface PublicPlayer {
   id: string;
   username: string;
+  avatar: string | null;
   hand_count: number;
   has_left: boolean;
 }

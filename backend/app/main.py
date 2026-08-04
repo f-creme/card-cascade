@@ -99,7 +99,7 @@ async def join_room(room_id: str, body: JoinRoomRequest) -> JoinRoomResponse:
         raise HTTPException(status_code=404, detail="Unknown room")
 
     try: 
-        room.add_player(body.player_id, body.username)
+        room.add_player(body.player_id, body.username, body.avatar)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

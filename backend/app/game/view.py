@@ -7,13 +7,14 @@ from app.game.state import DrawChain, GameState
 class PublicPlayer(BaseModel):
     id: str
     username: str
+    avatar: str | None
     hand_count: int
     has_left: bool
 
 
 class PlayerView(BaseModel):
     player_id: str
-    hand: list[Card] 
+    hand: list[Card]
     players: list[PublicPlayer]
     current_player_index: int
     draw_pile_count: int
@@ -37,8 +38,9 @@ def build_player_view(state: GameState, player_id: str) -> PlayerView:
         hand=viewer.hand,
         players=[
             PublicPlayer(
-                id=p.id, 
-                username=p.username, 
+                id=p.id,
+                username=p.username,
+                avatar=p.avatar,
                 hand_count=len(p.hand),
                 has_left=p.id in state.left_players,
             )

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useGameSocket } from "../hooks/useGameSocket";
-import { CardBack, CardView } from "../components/CardView";
+import { CardBack, CardView, COLOR_CLASSES } from "../components/CardView";
 import { SpecialCardModal } from "../components/SpecialCardModal";
+import { avatarSrc } from "../avatar";
 import type { Card, Color, Identity } from "../types";
 
 interface Props {
@@ -23,7 +24,7 @@ export function GameScreen({ roomId, identity }: Props) {
 
   const myIndex = view.players.findIndex((p) => p.id === view.player_id);
   const isMyTurn = view.current_player_index === myIndex && !view.winner_id;
-  const opponents = view.players.filter((p) => p.id !== view.player_id);
+  const opponents = view.players.filter((p) => p.id !== view.player_id && !p.has_left);
   const topDiscard = view.discard_pile[view.discard_pile.length - 1];
 
   function handleCardClick(card: Card) {
@@ -33,7 +34,7 @@ export function GameScreen({ roomId, identity }: Props) {
     } else if (card.kind === "second_chance") {
       send({ kind: "play_special", player_id: identity.uuid, card_id: card.id });
     } else {
-      // draw, double, block, block3 : a color must be announced first
+      // draw, double, block, block3 
       setPendingSpecial(card);
     }
   }
@@ -69,11 +70,11 @@ export function GameScreen({ roomId, identity }: Props) {
         </span>
       </header>
 
-      {/* Opponents */}
-      <div className="flex gap-2 overflow-x-auto p-3">
-        {opponents.map((player) => {
-          const playerIndex = view.players.findIndex((p) => p.id === player.id);
-          const isTheirTurn = playerIndex === view.current_player_index;
+      {/* All players, even yourself */}
+      <div className="flex gap-3 overflow-x-auto p-3">
+        {view.players.map((player, index) => {
+          const isTheirTurn = index === view.current_player_index;
+          const isMe = player.id === view.player_id;
           return (
             <div
               key={player.id}
@@ -81,9 +82,19 @@ export function GameScreen({ roomId, identity }: Props) {
                 isTheirTurn ? "bg-primary text-primary-content" : "bg-base-100"
               } ${player.has_left ? "opacity-40" : ""}`}
             >
-              <span className="text-sm font-semibold">{player.username}</span>
+              <div className="avatar">
+                <div className="w-10 rounded-full">
+                  <img src={avatarSrc(player.avatar)} alt="" />
+                </div>
+              </div>
+              <span className="max-w-20 truncate text-xs font-semibold">
+                {player.username}
+                {isMe ? " (vous)" : ""}
+              </span>
               <span className="text-xs">
-                {player.has_left ? "a quitté" : `${player.hand_count} carte${player.hand_count !== 1 ? "s" : ""}`}
+                {player.has_left
+                  ? "a quitté"
+                  : `${player.hand_count} carte${player.hand_count !== 1 ? "s" : ""}`}
               </span>
             </div>
           );
@@ -99,30 +110,44 @@ export function GameScreen({ roomId, identity }: Props) {
           </div>
         )}
         {view.announced_color && !view.draw_chain && (
-          <p className="text-sm text-base-content/70">
-            Couleur en cours : <span className="font-semibold">{view.announced_color}</span>
-          </p>
+          <div className="flex items-center gap-2 text-sm text-base-content/70">
+            <span>Couleur en cours :</span>
+            <span className={`inline-block h-4 w-4 rounded-full ${COLOR_CLASSES[view.announced_color]}`} />
+          </div>
         )}
 
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-center gap-1">
-            <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
-            <span className="text-xs text-base-content/60">Pioche</span>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handleDraw}>
+            Piocher
+          </button>
+
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center gap-1">
+              <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
+              <span className="text-xs text-base-content/60">Pioche</span>
+            </div>
+
+            {topDiscard && (
+              <div className="flex flex-col items-center gap-1">
+                <CardView card={topDiscard} />
+                <span className="text-xs text-base-content/60">Défausse</span>
+              </div>
+            )}
+
+            {/* Reserved space for 2nd chances */}
+            <div className="flex w-14 flex-col items-center gap-1 sm:w-16">
+              {view.second_chance_pile.length > 0 && (
+                <>
+                  <CardBack count={view.second_chance_pile.length} />
+                  <span className="text-xs text-base-content/60">2ndes chances</span>
+                </>
+              )}
+            </div>
           </div>
 
-          {topDiscard && (
-            <div className="flex flex-col items-center gap-1">
-              <CardView card={topDiscard} />
-              <span className="text-xs text-base-content/60">Défausse</span>
-            </div>
-          )}
-
-          {view.second_chance_pile.length > 0 && (
-            <div className="flex flex-col items-center gap-1">
-              <CardBack count={view.second_chance_pile.length} />
-              <span className="text-xs text-base-content/60">2ndes chances</span>
-            </div>
-          )}
+          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handlePass}>
+            Passer
+          </button>
         </div>
 
         <p className="text-lg font-semibold">
@@ -132,17 +157,8 @@ export function GameScreen({ roomId, identity }: Props) {
         {serverError && <p className="text-sm text-error">{serverError}</p>}
       </div>
 
-      {/* Actions + hand of player */}
+      {/* Hand */}
       <div className="flex flex-col gap-3 bg-base-100 p-3 shadow-inner">
-        <div className="flex justify-center gap-2">
-          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handleDraw}>
-            Piocher
-          </button>
-          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handlePass}>
-            Passer
-          </button>
-        </div>
-
         <div className="flex gap-2 overflow-x-auto px-2 pb-2">
           {view.hand.map((card) => (
             <CardView key={card.id} card={card} onClick={() => handleCardClick(card)} disabled={!isMyTurn} />
@@ -153,7 +169,7 @@ export function GameScreen({ roomId, identity }: Props) {
       {pendingSpecial && (
         <SpecialCardModal
           card={pendingSpecial}
-          opponents={opponents.filter((p) => !p.has_left)}
+          opponents={opponents}
           onConfirm={handleConfirmSpecial}
           onCancel={() => setPendingSpecial(null)}
         />

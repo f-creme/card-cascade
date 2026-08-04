@@ -7,6 +7,7 @@ from app.game.cards import Card, Color, NumberCard, build_deck
 class Player(BaseModel):
     id: str
     username: str
+    avatar: str | None = None
     hand: list[Card]
 
 class DrawChain(BaseModel):
@@ -35,14 +36,18 @@ def active_color(state: GameState):
     assert state.announced_color is not None
     return state.announced_color
 
-def create_initial_state(players: list[tuple[str, str]]) -> GameState:
+def create_initial_state(
+        players: list[tuple[str, str]],
+        avatars: dict[str, str] | None = None
+) -> GameState:
+    avatars = avatars or {}
     deck = build_deck()
     random.shuffle(deck)
 
     player_objs: list[Player] = []
     for player_id, username in players:
         hand = [deck.pop() for _ in range(7)]
-        player_objs.append(Player(id=player_id, username=username, hand=hand))
+        player_objs.append(Player(id=player_id, username=username, avatar=avatars.get(player_id), hand=hand))
 
     first_discard: NumberCard | None = None
     while first_discard is None:
