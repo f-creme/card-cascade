@@ -66,7 +66,7 @@ export function IdentityScreen({ identity, onIdentityReady, onRoomJoined }: Prop
     }
 
     async function handleJoinRoom() {
-        if (!canProceed || roomCodeInput.trim()) return;
+        if (!canProceed || !roomCodeInput.trim()) return;
         setActionError(null);
         setActionBusy(true);
         try {
