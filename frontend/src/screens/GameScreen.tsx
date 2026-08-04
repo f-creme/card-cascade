@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CardBack, CardView } from "../components/CardView";
-import type { Card, Identity } from "../types";
+import { SpecialCardModal } from "../components/SpecialCardModal";
+import type { Card, Color, Identity } from "../types";
 
 interface Props {
   roomId: string;
@@ -9,6 +11,7 @@ interface Props {
 
 export function GameScreen({ roomId, identity }: Props) {
   const { view, serverError, connected, send } = useGameSocket(roomId, identity.uuid);
+  const [pendingSpecial, setPendingSpecial] = useState<Card | null>(null);
 
   if (!view) {
     return (
@@ -27,8 +30,24 @@ export function GameScreen({ roomId, identity }: Props) {
     if (!isMyTurn) return;
     if (card.kind === "number") {
       send({ kind: "play_card", player_id: identity.uuid, card_id: card.id });
+    } else if (card.kind === "second_chance") {
+      send({ kind: "play_special", player_id: identity.uuid, card_id: card.id });
+    } else {
+      // draw, double, block, block3 : a color must be announced first
+      setPendingSpecial(card);
     }
-    // Les cartes spéciales seront gérées à l'étape suivante.
+  }
+
+  function handleConfirmSpecial(announcedColor: Color, skipTargets?: string[]) {
+    if (!pendingSpecial) return;
+    send({
+      kind: "play_special",
+      player_id: identity.uuid,
+      card_id: pendingSpecial.id,
+      announced_color: announcedColor,
+      skip_targets: skipTargets,
+    });
+    setPendingSpecial(null);
   }
 
   function handleDraw() {
@@ -43,12 +62,14 @@ export function GameScreen({ roomId, identity }: Props) {
 
   return (
     <div className="flex min-h-screen flex-col bg-base-200">
+      {/* Header */}
       <header className="flex items-center justify-between bg-base-100 px-4 py-2 shadow">
         <span className="font-mono text-sm">
           Room {roomId} {!connected && <span className="text-error">(déconnecté)</span>}
         </span>
       </header>
 
+      {/* Opponents */}
       <div className="flex gap-2 overflow-x-auto p-3">
         {opponents.map((player) => {
           const playerIndex = view.players.findIndex((p) => p.id === player.id);
@@ -69,7 +90,20 @@ export function GameScreen({ roomId, identity }: Props) {
         })}
       </div>
 
+      {/* Central zone */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
+        {view.draw_chain && (
+          <div className="alert alert-warning max-w-sm py-2 text-sm">
+            Chaîne de pioche active : +{view.draw_chain.total}
+            {view.draw_chain.has_double ? " et x2" : ""} — pose une carte pioche ou pioche.
+          </div>
+        )}
+        {view.announced_color && !view.draw_chain && (
+          <p className="text-sm text-base-content/70">
+            Couleur en cours : <span className="font-semibold">{view.announced_color}</span>
+          </p>
+        )}
+
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-center gap-1">
             <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
@@ -98,6 +132,7 @@ export function GameScreen({ roomId, identity }: Props) {
         {serverError && <p className="text-sm text-error">{serverError}</p>}
       </div>
 
+      {/* Actions + hand of player */}
       <div className="flex flex-col gap-3 bg-base-100 p-3 shadow-inner">
         <div className="flex justify-center gap-2">
           <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handleDraw}>
@@ -110,15 +145,19 @@ export function GameScreen({ roomId, identity }: Props) {
 
         <div className="flex gap-2 overflow-x-auto px-2 pb-2">
           {view.hand.map((card) => (
-            <CardView
-              key={card.id}
-              card={card}
-              onClick={card.kind === "number" ? () => handleCardClick(card) : undefined}
-              disabled={!isMyTurn}
-            />
+            <CardView key={card.id} card={card} onClick={() => handleCardClick(card)} disabled={!isMyTurn} />
           ))}
         </div>
       </div>
+
+      {pendingSpecial && (
+        <SpecialCardModal
+          card={pendingSpecial}
+          opponents={opponents.filter((p) => !p.has_left)}
+          onConfirm={handleConfirmSpecial}
+          onCancel={() => setPendingSpecial(null)}
+        />
+      )}
     </div>
   );
 }
