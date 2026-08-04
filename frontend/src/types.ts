@@ -120,3 +120,16 @@ export type Action =
   | { kind: "draw"; player_id: string }
   | { kind: "pass"; player_id: string }
   | { kind: "leave"; player_id: string };
+
+export interface ScoreEntry {
+  id: string;
+  username: string;
+  avatar: string | null;
+  score: number;
+  cards_remaining: number;
+}
+
+export interface ScoresResponse {
+  winner_id: string;
+  ranking: ScoreEntry[];
+}

@@ -19,6 +19,11 @@ function App() {
     setGameStarted(true);
   }, []);
 
+  const handleLeaveGame = useCallback(() => {
+    setRoomId(null);
+    setGameStarted(false);
+  }, []);
+
   if (!roomId || !identity) {
     return (
       <IdentityScreen
@@ -33,7 +38,7 @@ function App() {
     return <LobbyScreen roomId={roomId} identity={identity} onGameStart={handleGameStart} />;
   }
 
-  return <GameScreen roomId={roomId} identity={identity} />;
+  return <GameScreen roomId={roomId} identity={identity} onLeave={handleLeaveGame} />;
 }
 
 export default App;

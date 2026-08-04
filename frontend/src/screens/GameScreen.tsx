@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CardBack, CardView, COLOR_CLASSES } from "../components/CardView";
 import { SpecialCardModal } from "../components/SpecialCardModal";
+import { ScoreModal } from "../components/ScoreModal";
 import { avatarSrc } from "../avatar";
 import type { Card, Color, Identity, NumberCard } from "../types";
 
 interface Props {
   roomId: string;
   identity: Identity;
+  onLeave: () => void;
 }
 
-export function GameScreen({ roomId, identity }: Props) {
+export function GameScreen({ roomId, identity, onLeave }: Props) {
   const { view, serverError, connected, send } = useGameSocket(roomId, identity.uuid);
   const [pendingSpecial, setPendingSpecial] = useState<Card | null>(null);
   const [pairMode, setPairMode] = useState(false);
@@ -103,6 +105,11 @@ export function GameScreen({ roomId, identity }: Props) {
     send({ kind: "pass", player_id: identity.uuid });
   }
 
+  function handleLeaveClick() {
+    send({ kind: "leave", player_id: identity.uuid });
+    onLeave();
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-base-200">
       {/* En-tête */}
@@ -110,6 +117,9 @@ export function GameScreen({ roomId, identity }: Props) {
         <span className="font-mono text-sm">
           Room {roomId} {!connected && <span className="text-error">(déconnecté)</span>}
         </span>
+        <button type="button" className="btn btn-error btn-outline btn-sm" onClick={handleLeaveClick}>
+          Quitter
+        </button>
       </header>
 
       {/* Tous les joueurs, dans l'ordre du tour, soi-même compris */}
@@ -257,6 +267,10 @@ export function GameScreen({ roomId, identity }: Props) {
           onConfirm={handleConfirmSpecial}
           onCancel={() => setPendingSpecial(null)}
         />
+      )}
+
+      {view.winner_id && (
+        <ScoreModal roomId={roomId} myId={identity.uuid} onBackToMenu={onLeave} />
       )}
     </div>
   );

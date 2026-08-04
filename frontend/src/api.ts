@@ -1,4 +1,4 @@
-import type { CreateRoomResponse, JoinRoomResponse, RoomStatus, UserProfile } from "./types";
+import type { CreateRoomResponse, JoinRoomResponse, RoomStatus, ScoresResponse, UserProfile } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -47,4 +47,9 @@ export async function startRoom(roomId: string, playerId: string): Promise<void>
         body: JSON.stringify({ player_id: playerId }),
     });
     await parseOrThrow<{ status: string }>(response);
+}
+
+export async function getRoomScores(roomId: string): Promise<ScoresResponse> {
+    const response = await fetch(`${API_URL}/rooms/${roomId}/scores`);
+    return parseOrThrow<ScoresResponse>(response);
 }
