@@ -13,7 +13,7 @@ class Room:
     connections: dict[str, WebSocket] = field(default_factory=dict)
     result_recorded: bool = False
 
-    def add_player(self, player_id: str, username: str, avatar: str) -> None: 
+    def add_player(self, player_id: str, username: str, avatar: str | None = None) -> None: 
         if self.state is not None:
             raise ValueError("Game has already begun")
         if any(pid == player_id for pid, _ in self.players):

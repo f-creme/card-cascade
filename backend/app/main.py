@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import close_pool, ensure_user, get_pool, get_user, init_pool, record_game_result, get_users_stats
 from app.game.engine import Action, IllegalActionError, apply_action
 from app.game.view import build_player_view
+from app.game.scoring import ranked_players
 from app.rooms import RoomManager
 
 @asynccontextmanager
@@ -79,6 +80,17 @@ class RoomStatusResponse(BaseModel):
     owner_id: str
     started: bool
     players: list[LobbyPlayerWithStats]
+
+class ScoreEntry(BaseModel):
+    id: str
+    username: str
+    avatar: str | None
+    score: int
+    cards_remaining: int
+
+class ScoresResponse(BaseModel):
+    winner_id: str
+    ranking: list[ScoreEntry]
 
 @app.post("/rooms", response_model=CreateRoomResponse)
 def create_room() -> CreateRoomResponse:
@@ -157,6 +169,32 @@ async def get_room_status(room_id: str) -> RoomStatusResponse:
                 games_won=stats.get(pid, {}).get("games_won", 0)
             )
             for pid, username in room.players
+        ],
+    )
+
+@app.get("/rooms/{room_id}/scores", response_model=ScoresResponse)
+def get_room_scores(room_id: str) -> ScoresResponse:
+    try:
+        room = rooms.get_room(room_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown room")
+
+    if room.state is None or room.state.winner_id is None:
+        raise HTTPException(status_code=400, detail="Game is not finished")
+
+    usernames = dict(room.players)
+    hands_by_id = {p.id: p.hand for p in room.state.players}
+
+    return ScoresResponse(
+        winner_id=room.state.winner_id,
+        ranking=[
+            ScoreEntry(
+                id=pid,
+                username=usernames.get(pid, "?"),
+                avatar=room.player_avatars.get(pid),
+                score=score,
+                cards_remaining=len(hands_by_id.get(pid, [])),
+            ) for pid, score in ranked_players(room.state)
         ],
     )
 

@@ -275,3 +275,50 @@ def test_get_room_status_unknown_room_returns_404(client):
     response = client.get("/rooms/GHOST0")
 
     assert response.status_code == 404
+
+def test_get_room_scores_before_game_ends_returns_400(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob"})
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
+
+    response = client.get(f"/rooms/{room_id}/scores")
+
+    assert response.status_code == 400
+
+def test_get_room_scores_unknown_room_returns_404(client):
+    response = client.get("/rooms/GHOST0/scores")
+
+    assert response.status_code == 404
+
+def test_get_room_scores_after_win_returns_ranking(client):
+    room_id = client.post("/rooms").json()["room_id"]
+    alice, bob = new_player_id(), new_player_id()
+    client.post(f"/rooms/{room_id}/join", json={"player_id": alice, "username": "Alice", "avatar": "avatar-1"})
+    client.post(f"/rooms/{room_id}/join", json={"player_id": bob, "username": "Bob", "avatar": "avatar-2"})
+    client.post(f"/rooms/{room_id}/start", json={"player_id": alice})
+
+    room = rooms.get_room(room_id)
+    room.state.discard_pile = [NumberCard(id="top", value=5, color=Color.GREEN)]
+    room.state.players[0].hand = [NumberCard(id="win", value=5, color=Color.GREEN)]
+    room.state.players[1].hand = [
+        NumberCard(id="left1", value=7, color=Color.BROWN),
+        NumberCard(id="left2", value=3, color=Color.RED),
+    ]
+    room.state.current_player_index = 0
+
+    with client.websocket_connect(f"/ws/{room_id}/{alice}") as ws0:
+        ws0.receive_json()
+        ws0.send_json({"kind": "play_card", "player_id": alice, "card_id": "win"})
+        ws0.receive_json()
+
+    response = client.get(f"/rooms/{room_id}/scores")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["winner_id"] == alice
+    assert body["ranking"] == [
+        {"id": alice, "username": "Alice", "avatar": "avatar-1", "score": 0, "cards_remaining": 0},
+        {"id": bob, "username": "Bob", "avatar": "avatar-2", "score": 10, "cards_remaining": 2},
+    ]
