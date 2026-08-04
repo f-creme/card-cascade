@@ -31,9 +31,10 @@ interface Props {
   card: Card;
   onClick?: () => void;
   disabled?: boolean;
+  selected?: boolean;
 }
 
-export function CardView({ card, onClick, disabled }: Props) {
+export function CardView({ card, onClick, disabled, selected }: Props) {
   const { label, colorClass } = labelAndColor(card);
   const clickable = !!onClick && !disabled;
 
@@ -43,8 +44,8 @@ export function CardView({ card, onClick, disabled }: Props) {
       disabled={!clickable}
       onClick={onClick}
       className={`flex h-20 w-14 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow transition sm:h-24 sm:w-16 ${colorClass} ${
-        clickable ? "cursor-pointer hover:-translate-y-1" : "cursor-default opacity-90"
-      }`}
+        selected ? "-translate-y-2 ring-4 ring-primary" : ""
+      } ${clickable ? "cursor-pointer hover:-translate-y-1" : "cursor-default opacity-90"}`}
     >
       {label}
     </button>
