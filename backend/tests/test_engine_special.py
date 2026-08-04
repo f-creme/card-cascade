@@ -344,3 +344,35 @@ def test_second_chance_success_but_player_declines_and_passes():
     assert new_state.draw_chain is None
     assert len(new_state.players[0].hand) == 1 + 4  # la carte de la 2nde chance + le total
     assert new_state.current_player_index == 0
+
+def test_playing_a_draw_card_actually_appears_on_the_discard_pile():
+    top = NumberCard(id="top", value=5, color=Color.GREEN)
+    plus4 = DrawCard(id="d1", amount=4)
+    state = make_state(hands=[[plus4], []], top_card=top)
+
+    new_state = apply_action(
+        state, PlaySpecialAction(player_id="p0", card_id="d1", announced_color=Color.RED)
+    )
+
+    assert new_state.discard_pile[-1].id == "d1"
+
+
+def test_after_resolving_a_chain_the_announced_color_is_actually_usable():
+    from app.game.engine import PlayCardAction
+
+    numbered_top = NumberCard(id="old-top", value=5, color=Color.GREEN)
+    plus2 = DrawCard(id="d1", amount=2)
+
+    playable = NumberCard(id="pc", value=9, color=Color.RED)
+    state = make_state(hands=[[plus2], [playable]], top_card=numbered_top)
+
+    state = apply_action(
+        state, PlaySpecialAction(player_id="p0", card_id="d1", announced_color=Color.RED)
+    )
+
+    state.draw_pile = [NumberCard(id=f"d{i}", value=1, color=Color.GREY) for i in range(2)]
+    state = apply_action(state, DrawAction(player_id="p1"))
+
+    new_state = apply_action(state, PlayCardAction(player_id="p1", card_id="pc"))
+
+    assert new_state.discard_pile[-1].id == "pc"

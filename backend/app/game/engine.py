@@ -295,6 +295,9 @@ def _apply_draw_or_double(
     else: 
         state.draw_chain.total += card.amount
     state.draw_chain.pending_color = action.announced_color
+
+    state.discard_pile.append(card)
+
     _advance_turn(state)
 
 def _draw_n_cards(state: GameState, player: Player, n: int) -> None:
