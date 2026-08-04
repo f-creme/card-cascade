@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AVATAR_OPTIONS } from "../avatar";
 import { createRoom, getUser, joinRoom } from "../api";
 import type { Identity } from "../types";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 interface Props {
   identity: Identity | null;
@@ -108,7 +109,10 @@ export function IdentityScreen({ identity, onIdentityReady, onRoomJoined }: Prop
     <div className="flex min-h-screen items-center justify-center bg-base-200 p-4">
       <div className="card w-full max-w-lg bg-base-100 shadow-xl">
         <div className="card-body gap-6">
-          <h1 className="card-title text-2xl">card-cascade</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="card-title text-2xl">card-cascade</h1>
+            <ThemeToggle />
+          </div>
 
           {/* Reserved for game's cover picture.
               Replace by <img src="/cover.png" className="h-32 w-full rounded-box object-cover" />

@@ -1,5 +1,7 @@
 @import "tailwindcss";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: emerald --default, dark --preferdark;
+}
 
 @keyframes confetti-fall {
   from {
