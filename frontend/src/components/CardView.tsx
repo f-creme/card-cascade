@@ -10,20 +10,39 @@ export const COLOR_CLASSES: Record<Color, string> = {
   brown: "bg-amber-800",
 };
 
-function labelAndColor(card: Card): { label: string; colorClass: string } {
+const CARD_BACK_SRC = "/cards/back.PNG";
+
+function cardImageSrc(card: Card): string {
   switch (card.kind) {
     case "number":
-      return { label: String(card.value), colorClass: COLOR_CLASSES[card.color] };
+      return `/cards/number-${card.value}.PNG`;
     case "draw":
-      return { label: `+${card.amount}`, colorClass: "bg-slate-700" };
+      return `/cards/draw-${card.amount}.PNG`;
     case "double":
-      return { label: "x2", colorClass: "bg-slate-900" };
+      return "/cards/double.PNG";
     case "second_chance":
-      return { label: "2nde ch.", colorClass: "bg-violet-600" };
+      return "/cards/second-chance.PNG";
     case "block":
-      return { label: "Bloc", colorClass: "bg-rose-800" };
+      return "/cards/block.PNG";
     case "block3":
-      return { label: "Bloc x3", colorClass: "bg-rose-950" };
+      return "/cards/block3.PNG";
+  }
+}
+
+function cardLabel(card: Card): string {
+  switch (card.kind) {
+    case "number":
+      return `Carte ${card.value}`;
+    case "draw":
+      return `Pioche +${card.amount}`;
+    case "double":
+      return "Double (x2)";
+    case "second_chance":
+      return "Seconde chance";
+    case "block":
+      return "Bloc";
+    case "block3":
+      return "Bloc 3 fois";
   }
 }
 
@@ -35,7 +54,6 @@ interface Props {
 }
 
 export function CardView({ card, onClick, disabled, selected }: Props) {
-  const { label, colorClass } = labelAndColor(card);
   const clickable = !!onClick && !disabled;
 
   return (
@@ -43,11 +61,11 @@ export function CardView({ card, onClick, disabled, selected }: Props) {
       type="button"
       disabled={!clickable}
       onClick={onClick}
-      className={`flex h-20 w-14 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow transition sm:h-24 sm:w-16 ${colorClass} ${
-        selected ? "-translate-y-2 ring-4 ring-primary" : ""
-      } ${clickable ? "cursor-pointer hover:-translate-y-1" : "cursor-default opacity-90"}`}
+      className={`aspect-[600/1130] w-20 shrink-0 overflow-hidden rounded-lg shadow-md transition sm:w-28 ${
+        selected ? "z-10 -translate-y-4 ring-4 ring-primary" : ""
+      } ${clickable ? "cursor-pointer hover:z-10 hover:-translate-y-2" : "cursor-default opacity-90"}`}
     >
-      {label}
+      <img src={cardImageSrc(card)} alt={cardLabel(card)} className="h-full w-full object-cover" />
     </button>
   );
 }
@@ -58,11 +76,14 @@ export function CardBack({ count, onClick }: { count: number; onClick?: () => vo
       type="button"
       disabled={!onClick}
       onClick={onClick}
-      className={`flex h-20 w-14 shrink-0 items-center justify-center rounded-lg border-2 border-base-100 bg-neutral text-sm font-bold text-neutral-content shadow sm:h-24 sm:w-16 ${
-        onClick ? "cursor-pointer hover:-translate-y-1" : "cursor-default opacity-60"
+      className={`relative aspect-[600/1130] w-20 shrink-0 overflow-hidden rounded-lg shadow-md sm:w-28 ${
+        onClick ? "cursor-pointer hover:-translate-y-2" : "cursor-default opacity-60"
       }`}
     >
-      {count}
+      <img src={CARD_BACK_SRC} alt="Pioche" className="h-full w-full object-cover" />
+      <span className="absolute bottom-1 right-1 rounded-full bg-neutral px-2 py-0.5 text-sm font-bold text-neutral-content shadow">
+        {count}
+      </span>
     </button>
   );
 }

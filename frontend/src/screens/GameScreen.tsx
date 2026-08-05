@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type WheelEvent } from "react";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CardBack, CardView, COLOR_CLASSES } from "../components/CardView";
 import { SpecialCardModal } from "../components/SpecialCardModal";
@@ -21,7 +21,6 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
   const myIndex = view ? view.players.findIndex((p) => p.id === view.player_id) : -1;
   const isMyTurn = !!view && view.current_player_index === myIndex && !view.winner_id;
 
-  // Si ce n'est plus (ou plus jamais eu) mon tour, on quitte proprement le mode paire
   useEffect(() => {
     if (!isMyTurn) {
       setPairMode(false);
@@ -41,11 +40,17 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
   const topDiscard = view.discard_pile[view.discard_pile.length - 1];
   const selectedCards = view.hand.filter((c) => selectedForPair.includes(c.id)) as NumberCard[];
 
+  function handleHandWheel(e: WheelEvent<HTMLDivElement>) {
+    if (e.deltaY === 0) return;
+    e.currentTarget.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+
   function handleCardClick(card: Card) {
     if (!isMyTurn) return;
 
     if (pairMode) {
-      if (card.kind !== "number") return; // seules les cartes numérotées forment une paire
+      if (card.kind !== "number") return; 
       setSelectedForPair((prev) => {
         if (prev.includes(card.id)) return prev.filter((id) => id !== card.id);
         if (prev.length >= 2) return prev;
@@ -59,7 +64,6 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
     } else if (card.kind === "second_chance") {
       send({ kind: "play_special", player_id: identity.uuid, card_id: card.id });
     } else {
-      // draw, double, block, block3 : il faut d'abord annoncer une couleur (et parfois des cibles)
       setPendingSpecial(card);
     }
   }
@@ -112,7 +116,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
 
   return (
     <div className="flex min-h-screen flex-col bg-base-200">
-      {/* En-tête */}
+      {/* Header */}
       <header className="flex items-center justify-between bg-base-100 px-4 py-2 shadow">
         <span className="font-mono text-sm">
           Room {roomId} {!connected && <span className="text-error">(déconnecté)</span>}
@@ -122,7 +126,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
         </button>
       </header>
 
-      {/* Tous les joueurs, dans l'ordre du tour, soi-même compris */}
+      {/* All players, including yourself */}
       <div className="flex gap-3 overflow-x-auto p-3">
         {view.players.map((player, index) => {
           const isTheirTurn = index === view.current_player_index;
@@ -153,7 +157,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
         })}
       </div>
 
-      {/* Zone centrale */}
+      {/* Central zone */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
         {view.draw_chain && (
           <div className="alert alert-warning max-w-sm py-2 text-sm">
@@ -173,7 +177,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
             Piocher
           </button>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <div className="flex flex-col items-center gap-1">
               <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
               <span className="text-xs text-base-content/60">Pioche</span>
@@ -186,8 +190,8 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
               </div>
             )}
 
-            {/* Emplacement toujours réservé, même vide, pour que rien ne saute au premier coup */}
-            <div className="flex w-14 flex-col items-center gap-1 sm:w-16">
+            {/* Reserved space */}
+            <div className="flex w-20 flex-col items-center gap-1 sm:w-28">
               {view.second_chance_pile.length > 0 && (
                 <>
                   <CardBack count={view.second_chance_pile.length} />
@@ -209,7 +213,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
         {serverError && <p className="text-sm text-error">{serverError}</p>}
       </div>
 
-      {/* Main du joueur */}
+      {/* Hand */}
       <div className="flex flex-col gap-2 bg-base-100 p-3 shadow-inner">
         <div className="flex items-center justify-center gap-2">
           <button
@@ -246,17 +250,22 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
             </div>
           </div>
         )}
-
-        <div className="flex gap-2 overflow-x-auto px-2 pb-2">
-          {view.hand.map((card) => (
-            <CardView
-              key={card.id}
-              card={card}
-              onClick={() => handleCardClick(card)}
-              disabled={!isMyTurn || (pairMode && card.kind !== "number")}
-              selected={selectedForPair.includes(card.id)}
-            />
-          ))}
+        <div className="h-32 overflow-hidden sm:h-44">
+          <div className="flex overflow-x-auto px-2" onWheel={handleHandWheel}>
+            {view.hand.map((card, index) => (
+              <div
+                key={card.id}
+                className={index === 0 ? "" : "shadow-lg/100 -ml-2 sm:-ml-4 sm:shadow-lg/100"}
+              >
+                <CardView
+                  card={card}
+                  onClick={() => handleCardClick(card)}
+                  disabled={!isMyTurn || (pairMode && card.kind !== "number")}
+                  selected={selectedForPair.includes(card.id)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
