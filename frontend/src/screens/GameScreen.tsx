@@ -165,6 +165,11 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
             {view.draw_chain.has_double ? " et x2" : ""} — pose une carte pioche ou pioche.
           </div>
         )}
+
+        <p className="text-lg font-semibold">
+          {isMyTurn ? "À toi de jouer" : `Tour de ${view.players[view.current_player_index]?.username}`}
+        </p>
+
         {view.announced_color && !view.draw_chain && (
           <div className="flex items-center gap-2 text-sm text-base-content/70">
             <span>Couleur en cours :</span>
@@ -172,43 +177,37 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handleDraw}>
-            Piocher
-          </button>
-
-          <div className="flex items-center gap-8">
-            <div className="flex flex-col items-center gap-1">
-              <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
-              <span className="text-xs text-base-content/60">Pioche</span>
-            </div>
-
-            {topDiscard && (
-              <div className="flex flex-col items-center gap-1">
-                <CardView card={topDiscard} />
-                <span className="text-xs text-base-content/60">Défausse</span>
-              </div>
-            )}
-
-            {/* Reserved space */}
-            <div className="flex w-20 flex-col items-center gap-1 sm:w-28">
-              {view.second_chance_pile.length > 0 && (
-                <>
-                  <CardBack count={view.second_chance_pile.length} />
-                  <span className="text-xs text-base-content/60">2ndes chances</span>
-                </>
-              )}
-            </div>
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col items-center gap-1">
+            <CardBack count={view.draw_pile_count} onClick={isMyTurn ? handleDraw : undefined} />
+            <span className="text-xs text-base-content/60">Pioche</span>
           </div>
 
-          <button type="button" className="btn btn-sm" disabled={!isMyTurn} onClick={handlePass}>
+          {topDiscard && (
+            <div className="flex flex-col items-center gap-1">
+              <CardView card={topDiscard} />
+              <span className="text-xs text-base-content/60">Défausse</span>
+            </div>
+          )}
+
+          <div className="flex w-20 flex-col items-center gap-1 sm:w-28">
+            {view.second_chance_pile.length > 0 && (
+              <>
+                <CardBack count={view.second_chance_pile.length} />
+                <span className="text-xs text-base-content/60">2ndes chances</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-4">
+          <button type="button" className="btn btn-md btn-secondary" disabled={!isMyTurn} onClick={handleDraw}>
+            Piocher
+          </button>
+          <button type="button" className="btn btn-md btn-primary" disabled={!isMyTurn} onClick={handlePass}>
             Passer
           </button>
         </div>
-
-        <p className="text-lg font-semibold">
-          {isMyTurn ? "À toi de jouer" : `Tour de ${view.players[view.current_player_index]?.username}`}
-        </p>
 
         {serverError && <p className="text-sm text-error">{serverError}</p>}
       </div>
@@ -218,7 +217,7 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
         <div className="flex items-center justify-center gap-2">
           <button
             type="button"
-            className={`btn btn-xs ${pairMode ? "btn-secondary" : "btn-outline"}`}
+            className={`btn btn-sm ${pairMode ? "btn-secondary" : "btn-outline"}`}
             disabled={!isMyTurn}
             onClick={togglePairMode}
           >
@@ -250,12 +249,12 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
             </div>
           </div>
         )}
-        <div className="h-32 overflow-hidden sm:h-44">
-          <div className="flex overflow-x-auto px-2" onWheel={handleHandWheel}>
+        <div className="h-36 overflow-hidden sm:h-48">
+          <div className="flex overflow-x-auto px-2 pt-4" onWheel={handleHandWheel}>
             {view.hand.map((card, index) => (
               <div
                 key={card.id}
-                className={index === 0 ? "" : "shadow-lg/100 -ml-2 sm:-ml-4 sm:shadow-lg/100"}
+                className={index === 0 ? "" : "shadow-lg/100 -ml-0 sm:-ml-0 sm:shadow-lg/100"}
               >
                 <CardView
                   card={card}

@@ -63,7 +63,7 @@ export function CardView({ card, onClick, disabled, selected }: Props) {
       onClick={onClick}
       className={`aspect-[600/1130] w-20 shrink-0 overflow-hidden rounded-lg shadow-md transition sm:w-28 ${
         selected ? "z-10 -translate-y-4 ring-4 ring-primary" : ""
-      } ${clickable ? "cursor-pointer hover:z-10 hover:-translate-y-2" : "cursor-default opacity-90"}`}
+      } ${clickable ? "cursor-pointer hover:z-10 hover:-translate-y-2 hover:scale-110" : "cursor-default opacity-60"}`}
     >
       <img src={cardImageSrc(card)} alt={cardLabel(card)} className="h-full w-full object-cover" />
     </button>
@@ -77,7 +77,7 @@ export function CardBack({ count, onClick }: { count: number; onClick?: () => vo
       disabled={!onClick}
       onClick={onClick}
       className={`relative aspect-[600/1130] w-20 shrink-0 overflow-hidden rounded-lg shadow-md sm:w-28 ${
-        onClick ? "cursor-pointer hover:-translate-y-2" : "cursor-default opacity-60"
+        onClick ? "cursor-pointer hover:-translate-y-2 hover:scale-110" : "cursor-default opacity-60"
       }`}
     >
       <img src={CARD_BACK_SRC} alt="Pioche" className="h-full w-full object-cover" />
