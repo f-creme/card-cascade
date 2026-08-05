@@ -48,15 +48,15 @@ function cardLabel(card: Card): string {
   }
 }
 
-const SPECIAL_DESCRIPTIONS: Partial<Record<Card["kind"], string>> = {
-  draw: "Le joueur suivant pioche ce nombre de cartes, ou pose une autre carte de ce type pour continuer la chaîne. Se pose sur une carte numérotée (ou sur une chaîne déjà en cours). Nécessite d'annoncer une couleur.",
+export const SPECIAL_DESCRIPTIONS: Partial<Record<Card["kind"], string>> = {
+  draw: "Le·la joueur·euse suivant·e pioche ce nombre de cartes, ou pose une autre carte pioche pour continuer la chaîne. Se pose sur une carte numérotée (ou sur une chaîne déjà en cours). Nécessite d'annoncer une couleur.",
   double:
-    "Double la main du joueur qui devra finalement piocher au bout de la chaîne. Se combine avec les cartes +X. Nécessite d'annoncer une couleur.",
+    "Double la main du·de la joueur·euse qui devra finalement piocher au bout de la chaîne. Se combine avec les cartes pioche. Nécessite d'annoncer une couleur.",
   second_chance:
     "Jouable à tout moment durant ton tour : tu pioches une carte de plus, dans l'espoir qu'elle soit jouable.",
-  block: "Le joueur suivant passe son tour. Se pose sur une carte numérotée. Nécessite d'annoncer une couleur.",
+  block: "Le·la joueur·euse suivant·e passe son tour. Se pose sur une carte numérotée. Nécessite d'annoncer une couleur.",
   block3:
-    "Distribue 3 tours passés entre les joueurs de ton choix. Se pose sur une carte numérotée. Nécessite d'annoncer une couleur.",
+    "Distribue 3 tours passés entre les joueur·euses de ton choix. Se pose sur une carte numérotée. Nécessite d'annoncer une couleur.",
 };
 
 interface Props {

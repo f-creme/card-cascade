@@ -5,6 +5,7 @@ import { SpecialCardModal } from "../components/SpecialCardModal";
 import { ScoreModal } from "../components/ScoreModal";
 import { avatarSrc } from "../avatar";
 import type { Card, Color, Identity, NumberCard } from "../types";
+import { RulesModal } from "../components/RulesModal";
 
 interface Props {
   roomId: string;
@@ -20,6 +21,8 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
 
   const myIndex = view ? view.players.findIndex((p) => p.id === view.player_id) : -1;
   const isMyTurn = !!view && view.current_player_index === myIndex && !view.winner_id;
+
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     if (!isMyTurn) {
@@ -121,9 +124,14 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
         <span className="font-mono text-sm">
           Room {roomId} {!connected && <span className="text-error">(déconnecté)</span>}
         </span>
-        <button type="button" className="btn btn-error btn-outline btn-sm" onClick={handleLeaveClick}>
-          Quitter
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowRules(true)}>
+            Règles
+          </button>
+          <button type="button" className="btn btn-error btn-outline btn-sm" onClick={handleLeaveClick}>
+            Quitter
+          </button>
+        </div>
       </header>
 
       {/* All players, including yourself */}
@@ -280,6 +288,8 @@ export function GameScreen({ roomId, identity, onLeave }: Props) {
       {view.winner_id && (
         <ScoreModal roomId={roomId} myId={identity.uuid} onBackToMenu={onLeave} />
       )}
+
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
     </div>
   );
 }
